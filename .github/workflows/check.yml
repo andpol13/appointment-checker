@@ -16,18 +16,27 @@ jobs:
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'  # <- MAKE SURE THIS IS IN QUOTES
+          python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install Google Chrome and dependencies
         run: |
-          pip install selenium
           sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver
-          which chromedriver
+          sudo apt-get install -y wget gnupg unzip
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
+          unzip /tmp/chromedriver.zip -d /tmp/
+          sudo mv /tmp/chromedriver /usr/local/bin/chromedriver
+          sudo chmod +x /usr/local/bin/chromedriver
+          google-chrome --version
+          chromedriver --version
 
       - name: Run the script
         env:
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
           GMAIL_RECEIVER: ${{ secrets.GMAIL_RECEIVER }}
+          PATH: /usr/local/bin:$PATH
         run: python main.py
