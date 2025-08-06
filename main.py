@@ -51,6 +51,13 @@ def check_appointment():
         # Wait for the actual site to load
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
+# Accept or reject cookies if the popup is present
+        try:
+            wait.until(EC.element_to_be_clickable((By.ID, "cookie_msg_btn_no"))).click()
+            print("[✓] Cookie banner dismissed (Ablehnen).")
+        except:
+            print("[i] No cookie banner to dismiss.")
+
         # Continue as before
         wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
         wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
