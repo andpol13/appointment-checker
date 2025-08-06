@@ -65,13 +65,17 @@ def check_appointment():
         wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
         wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
         wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
+        print("[✓] Clicked 'Führerscheinstelle auswählen'")
 
         page_source = driver.page_source
+        page_source = driver.page_source
+
         if "Keine Zeiten verfügbar" not in page_source:
             print("[+] Slot may be available — sending email!")
             send_email_notification()
         else:
-            print("[-] No appointments available.")
+            print("[-] 'Keine Zeiten verfügbar' detected — no slots.")
+
 
     except Exception as e:
         import traceback
