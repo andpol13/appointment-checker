@@ -30,6 +30,9 @@ def send_email_notification():
     except Exception as e:
         print(f"[!] Failed to send email: {e}")
 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 def check_appointment():
     print("[*] Checking appointment availability...")
 
@@ -41,28 +44,31 @@ def check_appointment():
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
+        wait = WebDriverWait(driver, 15)
+
         driver.get(TARGET_URL)
-        time.sleep(3)
 
-        driver.find_element(By.ID, "buttonfunktionseinheit-5").click()
-        time.sleep(2)
+        # Step 2: Click "Fahrerlaubnis"
+        wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
 
-        driver.find_element(By.ID, "header_concerns_accordion-170").click()
-        time.sleep(1)
+        # Step 3: Open "Persönliche Vorsprache"
+        wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
 
-        driver.find_element(By.ID, "span-cnc-1024").click()
-        time.sleep(1)
+        # Step 4: Tick checkbox for "Ausländischer Führerschein"
+        wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1024"))).click()
 
-        driver.find_element(By.ID, "OKButton").click()
-        time.sleep(1)
+        # Step 5: Click OK in modal
+        wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
 
-        driver.find_element(By.ID, "WeiterButton").click()
-        time.sleep(2)
+        # Step 6: Click Weiter
+        wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
 
-        driver.find_element(By.NAME, "select_location").click()
-        time.sleep(2)
+        # Step 7: Click "Führerscheinstelle auswählen"
+        wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
 
-        if "Keine Zeiten verfügbar" not in driver.page_source:
+        # Step 8: Check for slot availability
+        page_source = driver.page_source
+        if "Keine Zeiten verfügbar" not in page_source:
             send_email_notification()
         else:
             print("[-] No appointments found.")
@@ -71,6 +77,7 @@ def check_appointment():
         print(f"[!] Error: {e}")
     finally:
         driver.quit()
+
 
 if __name__ == "__main__":
     check_appointment()
