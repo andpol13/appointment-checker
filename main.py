@@ -74,7 +74,10 @@ def check_appointment():
             print("[-] No appointments found.")
 
     except Exception as e:
-        print(f"[!] Error: {e}")
+        import traceback
+        print("[!] Exception occurred:")
+        traceback.print_exc()
+
     finally:
         driver.quit()
 
