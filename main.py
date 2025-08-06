@@ -42,31 +42,37 @@ def check_appointment():
     chrome_options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=chrome_options)
+    wait = WebDriverWait(driver, 20)
 
     try:
-        wait = WebDriverWait(driver, 15)
+        # Step 1: Open initial page
+        driver.get("https://www.landkreis-muenchen.de/themen/mobilitaet/fuehrerschein/terminvereinbarung-der-fuehrerscheinstelle/")
 
-        driver.get(TARGET_URL)
+        # Step 2: Click "Online-Terminvereinbarung" button
+        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Online-Terminvereinbarung"))).click()
 
-        # Step 2: Click "Fahrerlaubnis"
+        # Now we're on the appointment booking site
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+        # Step 3: Click "Fahrerlaubnis"
         wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
 
-        # Step 3: Open "Persönliche Vorsprache"
+        # Step 4: Open "Persönliche Vorsprache"
         wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
 
-        # Step 4: Tick checkbox for "Ausländischer Führerschein"
+        # Step 5: Tick checkbox for "Ausländischer Führerschein"
         wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1024"))).click()
 
-        # Step 5: Click OK in modal
+        # Step 6: Click OK on modal
         wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
 
-        # Step 6: Click Weiter
+        # Step 7: Click Weiter
         wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
 
-        # Step 7: Click "Führerscheinstelle auswählen"
+        # Step 8: Click "Führerscheinstelle auswählen"
         wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
 
-        # Step 8: Check for slot availability
+        # Step 9: Check for availability
         page_source = driver.page_source
         if "Keine Zeiten verfügbar" not in page_source:
             send_email_notification()
@@ -77,7 +83,7 @@ def check_appointment():
         import traceback
         print("[!] Exception occurred:")
         traceback.print_exc()
-
+        driver.save_screenshot("error.png")
     finally:
         driver.quit()
 
