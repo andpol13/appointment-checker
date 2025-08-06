@@ -30,8 +30,9 @@ jobs:
           unzip /tmp/chromedriver.zip -d /tmp/
           sudo mv /tmp/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
-          google-chrome --version
-          chromedriver --version
+
+      - name: Install Python dependencies
+        run: pip install selenium
 
       - name: Run the script
         env:
