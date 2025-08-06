@@ -44,27 +44,14 @@ def check_appointment():
     wait = WebDriverWait(driver, 30)
 
     try:
-        # Step 1: Open initial page
-        driver.get(TARGET_URL)
+        # ✅ Go directly to the real booking site
+        driver.get("https://termine-reservieren.de/termine/lramuenchen/efa/")
         print("Page title:", driver.title)
 
-        # Step 2: Handle cookie banner if present
-        try:
-            cookie_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Cookies erlauben")]')))
-            cookie_button.click()
-            print("[✓] Cookie banner accepted.")
-        except:
-            print("[i] No cookie banner or already accepted.")
-
-        # Step 3: Click the Online-Terminvereinbarung button
-        wait.until(EC.element_to_be_clickable(
-            (By.CSS_SELECTOR, 'a.cta_button[href*="termine-reservieren.de"]'))
-        ).click()
-        print("[✓] Clicked Online-Terminvereinbarung")
-
-        # Step 4: Continue on the actual booking site
+        # Wait for the actual site to load
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
+        # Continue as before
         wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
         wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
         wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1024"))).click()
