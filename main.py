@@ -44,38 +44,34 @@ def check_appointment():
     wait = WebDriverWait(driver, 30)
 
     try:
-        # Step 1: Load initial landing page
+        # Step 1: Open initial page
         driver.get(TARGET_URL)
         print("Page title:", driver.title)
 
-        # Step 2: Click "Online-Terminvereinbarung"
+        # Step 2: Handle cookie banner if present
+        try:
+            cookie_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Cookies erlauben")]')))
+            cookie_button.click()
+            print("[✓] Cookie banner accepted.")
+        except:
+            print("[i] No cookie banner or already accepted.")
+
+        # Step 3: Click the Online-Terminvereinbarung button
         wait.until(EC.element_to_be_clickable(
             (By.CSS_SELECTOR, 'a.cta_button[href*="termine-reservieren.de"]'))
         ).click()
         print("[✓] Clicked Online-Terminvereinbarung")
 
-        # Step 3: Wait for the second page body to load
+        # Step 4: Continue on the actual booking site
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
-        # Step 4: Click "Fahrerlaubnis"
         wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
-
-        # Step 5: Open "Persönliche Vorsprache"
         wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
-
-        # Step 6: Tick "Ausländischer Führerschein"
         wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1024"))).click()
-
-        # Step 7: Click OK in modal
         wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
-
-        # Step 8: Click Weiter
         wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
-
-        # Step 9: Click "Führerscheinstelle auswählen"
         wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
 
-        # Step 10: Check if slots are available
         page_source = driver.page_source
         if "Keine Zeiten verfügbar" not in page_source:
             print("[+] Slot may be available — sending email!")
