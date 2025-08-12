@@ -61,7 +61,7 @@ def check_appointment():
         section.click()
 
         # Step 5: Select "Führerschein Allgemein" (ID changed here)
-        wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1023"))).click()
+        wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1027"))).click()
         print("[✓] Selected 'Führerschein Allgemein'")
 
         # Step 6: Click OK in modal
