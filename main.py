@@ -1,106 +1,143 @@
 import os
+import re
+import time
 import smtplib
 from email.mime.text import MIMEText
+
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 
-# Email function
-def send_email(message):
-    sender = os.environ.get("GMAIL_SENDER")
-    password = os.environ.get("GMAIL_PASSWORD")
-    receiver = os.environ.get("GMAIL_RECEIVER")
+BOOKING_URL = "https://termine-reservieren.de/termine/lramuenchen/efa/"
 
-    msg = MIMEText(message)
-    msg["Subject"] = "Führerscheinstelle Appointment Checker"
-    msg["From"] = sender
-    msg["To"] = receiver
+GMAIL_SENDER   = os.getenv("GMAIL_SENDER")
+GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
+GMAIL_RECEIVER = os.getenv("GMAIL_RECEIVER")
 
+def send_email(subject: str, body: str):
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = GMAIL_SENDER
+    msg["To"] = GMAIL_RECEIVER
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+        s.login(GMAIL_SENDER, GMAIL_PASSWORD)
+        s.sendmail(GMAIL_SENDER, GMAIL_RECEIVER, msg.as_string())
+    print("[✓] Email sent.")
+
+def js_click(driver, elem):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", elem)
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender, password)
-            server.sendmail(sender, receiver, msg.as_string())
-        print("[✓] Email sent successfully.")
-    except Exception as e:
-        print(f"[!] Email send failed: {e}")
+        elem.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", elem)
 
-# Main check function
 def check_appointment():
     print("[*] Checking appointment availability…")
 
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    opts = Options()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
 
-    driver = webdriver.Chrome(options=chrome_options)
-    wait = WebDriverWait(driver, 15)
+    driver = webdriver.Chrome(options=opts)
+    wait = WebDriverWait(driver, 30)
 
     try:
-        # Step 1: Open main page
-        driver.get("https://www.landkreis-muenchen.de/themen/mobilitaet/fuehrerschein/terminvereinbarung-der-fuehrerscheinstelle/")
-        print(f"Page title: {driver.title}")
+        # 1) Open booking site
+        driver.get(BOOKING_URL)
+        print("Page title:", driver.title)
 
-        # Step 2: Click 'Online-Terminvereinbarung'
-        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Online-Terminvereinbarung"))).click()
-
-        # Step 3: Dismiss cookie banner if present
+        # 2) Cookie banner (Ablehnen)
         try:
-            cookie_btn = wait.until(EC.element_to_be_clickable((By.ID, "cookie_msg_btn_no")))
-            cookie_btn.click()
+            btn_cookie = wait.until(EC.element_to_be_clickable((By.ID, "cookie_msg_btn_no")))
+            js_click(driver, btn_cookie)
             print("[✓] Cookie banner dismissed.")
-        except TimeoutException:
-            print("[i] No cookie banner or already accepted.")
+        except Exception:
+            print("[i] No cookie banner to dismiss.")
 
-        # Step 4: Click 'Fahrerlaubnis'
-        wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
+        # 3) Click “Fahrerlaubnis”
+        fahrerlaubnis = wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5")))
+        js_click(driver, fahrerlaubnis)
         print("[✓] Clicked 'Fahrerlaubnis'")
 
-        # Step 5: Expand 'Persönliche Vorsprache (zur Abholung Führerschein)'
-        wait.until(EC.element_to_be_clickable((By.ID, "sb_6"))).click()
+        # 4) Expand “Persönliche Vorsprache (zur Abholung Führerschein)”
+        try:
+            accordion = wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170")))
+        except Exception:
+            accordion = wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//h3[contains(., 'Persönliche Vorsprache (zur Abholung Führerschein)')]")
+            ))
+        js_click(driver, accordion)
         print("[✓] Expanded 'Persönliche Vorsprache (zur Abholung Führerschein)'")
 
-        # Step 6: Select 'Führerschein Allgemein'
-        wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1027"))).click()
+        # 5) Tick “Führerschein Allgemein”
+        chk = wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1027")))
+        js_click(driver, chk)
         print("[✓] Selected 'Führerschein Allgemein'")
 
-        # Step 7: First OK
-        wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
-        print("[✓] Confirmed first OK.")
+        # 6) First OK (Anliegen confirmation)
+        try:
+            ok1 = wait.until(EC.element_to_be_clickable((By.ID, "OKButton")))
+            js_click(driver, ok1)
+            print("[✓] Confirmed first OK.")
+        except Exception:
+            print("[i] No first OK modal.")
 
-        # Step 8: Click Weiter
-        wait.until(EC.element_to_be_clickable((By.ID, "weiterButton"))).click()
+        # 7) Click “Weiter”
+        weiter = wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton")))
+        js_click(driver, weiter)
         print("[✓] Clicked 'Weiter'")
 
-        # Step 9: Second OK (Hinweis modal)
-        wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
-        print("[✓] Confirmed second OK (Hinweis modal).")
-
-        # Step 10: Read 'Nächster Termin' field
+        # 8) Second OK (Hinweis modal)
         try:
-            next_term_elem = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//dt[contains(text(),'Nächster Termin')]/following-sibling::dd[1]"))
+            ok2 = wait.until(EC.element_to_be_clickable((By.ID, "OKButton")))
+            js_click(driver, ok2)
+            print("[✓] Confirmed second OK (Hinweis).")
+        except Exception:
+            print("[i] No Hinweis modal.")
+
+        # 9) Read “Nächster Termin” on the same page (no further clicks)
+        #    <dt>Nächster Termin</dt><dd>ab 24.09.2025, 10:45 Uhr</dd>
+        try:
+            next_term = wait.until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//dt[contains(normalize-space(.), 'Nächster Termin')]/following-sibling::dd[1]")
+                )
             )
-            next_term_text = next_term_elem.text.strip()
+            next_text = (next_term.text or "").strip()
+            print("Nächster Termin raw:", repr(next_text))
 
-            if "Keine Zeiten verfügbar" in next_term_text or next_term_text == "":
-                print("[i] No slots available.")
-                send_email("No appointment slots available.")
-            else:
-                date_only = next_term_text.split(",")[0].replace("ab ", "").strip()
+            if not next_text or "Keine Zeiten verfügbar" in next_text:
+                print("[✗] No appointment slots available.")
+                return
+
+            # Extract only the date (dd.mm.yyyy)
+            m = re.search(r"(\d{2}\.\d{2}\.\d{4})", next_text)
+            if m:
+                date_only = m.group(1)
                 print(f"[✓] Appointment slot found: {date_only}")
-                send_email(f"Appointment slot available on {date_only}")
-
+                subject = f"Führerscheinstelle Slot: {date_only}"
+                body = f"First available date: {date_only}\nBooking page: {BOOKING_URL}"
+                send_email(subject, body)
+            else:
+                print("[!] Slot text present but date not parsed. (Check debug.html)")
         except Exception as e:
             print(f"[!] Could not find 'Nächster Termin' field: {e}")
-            send_email("Error: Could not retrieve appointment date.")
 
     except Exception as e:
-        print(f"[!] Exception occurred: {e}")
-        send_email(f"Error occurred during check: {e}")
+        print("[!] Exception occurred:")
+        import traceback; traceback.print_exc()
+        print("Current page title:", driver.title)
+        print("Current URL:", driver.current_url)
+        try:
+            with open("debug.html", "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+            driver.save_screenshot("error.png")
+            print("[!] Saved debug.html and error.png")
+        except Exception as e2:
+            print(f"[!] Failed to save debug artifacts: {e2}")
     finally:
         driver.quit()
 
