@@ -1,105 +1,122 @@
 import os
 import time
+import smtplib
+from email.mime.text import MIMEText
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Email sending
-import smtplib
-from email.mime.text import MIMEText
-
-# Load secrets from GitHub Actions
-GMAIL_SENDER = os.getenv("GMAIL_SENDER")
+# === Secrets from GitHub Actions ===
+GMAIL_SENDER   = os.getenv("GMAIL_SENDER")
 GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
 GMAIL_RECEIVER = os.getenv("GMAIL_RECEIVER")
 
-URL = "https://www.landkreis-muenchen.de/themen/mobilitaet/fuehrerschein/terminvereinbarung-der-fuehrerscheinstelle/"
+BOOKING_URL = "https://termine-reservieren.de/termine/lramuenchen/efa/"
 
 def send_email(subject, body):
-    """Send notification email."""
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = GMAIL_SENDER
     msg["To"] = GMAIL_RECEIVER
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_SENDER, GMAIL_PASSWORD)
-        server.sendmail(GMAIL_SENDER, GMAIL_RECEIVER, msg.as_string())
-    print(f"[✓] Email sent: {subject}")
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+            s.login(GMAIL_SENDER, GMAIL_PASSWORD)
+            s.sendmail(GMAIL_SENDER, GMAIL_RECEIVER, msg.as_string())
+        print("[✓] Email sent.")
+    except Exception as e:
+        print(f"[!] Email send failed: {e}")
 
 def check_appointment():
-    print("[*] Checking appointment availability...")
+    print("[*] Checking appointment availability…")
 
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    opts = Options()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
 
-    driver = webdriver.Chrome(options=chrome_options)
-    wait = WebDriverWait(driver, 15)
+    driver = webdriver.Chrome(options=opts)
+    wait = WebDriverWait(driver, 30)
 
     try:
-        driver.get(URL)
+        # 1) Go straight to the booking system
+        driver.get(BOOKING_URL)
         print("Page title:", driver.title)
 
-        # Accept or decline cookies
+        # 2) Dismiss cookie banner on booking site if present
         try:
-            cookie_button = wait.until(EC.element_to_be_clickable((By.ID, "cookie_msg_btn_no")))
-            cookie_button.click()
-            print("[✓] Cookie banner dismissed (Ablehnen).")
-        except:
-            print("[i] No cookie banner or already accepted.")
+            # “Ablehnen” (reject) button ID (observed): cookie_msg_btn_no
+            wait.until(EC.element_to_be_clickable((By.ID, "cookie_msg_btn_no"))).click()
+            print("[✓] Cookie banner dismissed.")
+        except Exception:
+            print("[i] No cookie banner to dismiss.")
 
-        # Step 1: Click "Online-Terminvereinbarung"
-        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Online-Terminvereinbarung"))).click()
-
-        # Step 2: Click "Fahrerlaubnis"
+        # 3) Click “Fahrerlaubnis”
         wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
+        print("[✓] Clicked 'Fahrerlaubnis'")
 
-        # Step 3: Expand "Persönliche Vorsprache (zur Abholung Führerschein)"
-        wait.until(
-            EC.element_to_be_clickable(
+        # 4) Expand “Persönliche Vorsprache (zur Abholung Führerschein)”
+        # Prefer the known ID; fall back to text-based XPath if ID changes.
+        try:
+            wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
+        except Exception:
+            wait.until(EC.element_to_be_clickable(
                 (By.XPATH, "//h3[contains(., 'Persönliche Vorsprache (zur Abholung Führerschein)')]")
-            )
-        ).click()
+            )).click()
         print("[✓] Expanded 'Persönliche Vorsprache (zur Abholung Führerschein)'")
 
-        # Step 4: Tick "Führerschein Allgemein"
+        # 5) Tick “Führerschein Allgemein”  (you confirmed ID = span-cnc-1027)
         wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1027"))).click()
         print("[✓] Selected 'Führerschein Allgemein'")
 
-        # Step 5: Click OK in popup (if it appears)
+        # 6) Confirm OK (modal)
         try:
             wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
-        except:
-            print("[i] No confirmation popup appeared.")
+            print("[✓] Confirmed selection (OK).")
+        except Exception:
+            print("[i] No confirmation modal.")
 
-        # Step 6: Click Weiter
+        # 7) Click “Weiter”
         wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
+        print("[✓] Clicked 'Weiter'")
 
-        # Step 7: Click "Führerscheinstelle auswählen"
-        wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
+        # 8) Click “Führerscheinstelle auswählen” if present on this step
+        try:
+            btn = wait.until(EC.presence_of_element_located((By.NAME, "select_location")))
+            if btn.is_displayed() and btn.is_enabled():
+                btn.click()
+                print("[✓] Clicked 'Führerscheinstelle auswählen'")
+        except Exception:
+            print("[i] 'Führerscheinstelle auswählen' button not present — proceeding.")
 
-        # Step 8: Check if there are available slots
-        time.sleep(2)
-        page_source = driver.page_source
+        # 9) Final status check on the current page
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(2)  # small settle time for dynamic content
+        html = driver.page_source
 
-        if "Keine Zeiten verfügbar" in page_source:
+        if "Keine Zeiten verfügbar" in html:
             print("[✗] No appointment slots available.")
         else:
-            print("[✓] Appointment slots FOUND!")
-            send_email("Führerscheinstelle Slot Available", "A slot is available! Go to the website now.")
+            print("[✓] Appointment slots FOUND! Sending email…")
+            send_email(
+                "Führerscheinstelle Slot Available",
+                "A slot seems available. Open:\nhttps://termine-reservieren.de/termine/lramuenchen/efa/"
+            )
 
     except Exception as e:
-        print(f"[!] Exception occurred: {e}")
+        print("[!] Exception occurred:")
+        import traceback; traceback.print_exc()
         print("Current page title:", driver.title)
         print("Current URL:", driver.current_url)
-        with open("debug_page.html", "w", encoding="utf-8") as f:
-            f.write(driver.page_source)
-        print("[!] Saved HTML for debugging.")
-
+        try:
+            with open("debug.html", "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+            driver.save_screenshot("error.png")
+            print("[!] Saved debug.html and error.png")
+        except Exception as e2:
+            print(f"[!] Failed to save debug artifacts: {e2}")
     finally:
         driver.quit()
 
