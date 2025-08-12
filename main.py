@@ -70,9 +70,17 @@ def check_appointment():
         # Step 7: Click Weiter
         wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
 
-        # Step 8: Click "Führerscheinstelle auswählen"
-        wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
-        print("[✓] Clicked 'Führerscheinstelle auswählen'")
+        # Step 8: Click "Führerscheinstelle auswählen" if present
+        try:
+            select_btn = wait.until(
+                EC.presence_of_element_located((By.NAME, "select_location"))
+            )
+            if select_btn.is_displayed():
+                select_btn.click()
+                print("[✓] Clicked 'Führerscheinstelle auswählen'")
+        except:
+            print("[i] 'Führerscheinstelle auswählen' button not found — continuing")
+
 
         # Step 9: Check availability
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
