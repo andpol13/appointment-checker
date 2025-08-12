@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import smtplib
 from email.mime.text import MIMEText
@@ -21,13 +22,38 @@ def send_email(subject, body):
     msg["Subject"] = subject
     msg["From"] = GMAIL_SENDER
     msg["To"] = GMAIL_RECEIVER
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+        s.login(GMAIL_SENDER, GMAIL_PASSWORD)
+        s.sendmail(GMAIL_SENDER, GMAIL_RECEIVER, msg.as_string())
+    print("[✓] Email sent.")
+
+def extract_first_slot_date(driver) -> str | None:
+    """Find and return only the date from the first available slot."""
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-            s.login(GMAIL_SENDER, GMAIL_PASSWORD)
-            s.sendmail(GMAIL_SENDER, GMAIL_RECEIVER, msg.as_string())
-        print("[✓] Email sent.")
-    except Exception as e:
-        print(f"[!] Email send failed: {e}")
+        el = WebDriverWait(driver, 8).until(
+            EC.presence_of_element_located((By.ID, "suggest_location_summary"))
+        )
+        txt = (el.text or "").strip()
+    except Exception:
+        txt = ""
+
+    if not txt:
+        try:
+            candidates = driver.find_elements(By.CSS_SELECTOR, "summary")
+            for c in candidates:
+                if "Termine ab" in c.text:
+                    txt = c.text.strip()
+                    break
+        except Exception:
+            pass
+
+    if not txt:
+        return None
+
+    m = re.search(r"Termine ab\s+(\d{2}\.\d{2}\.\d{4})", txt)
+    if m:
+        return m.group(1)
+    return None
 
 def check_appointment():
     print("[*] Checking appointment availability…")
@@ -41,24 +67,21 @@ def check_appointment():
     wait = WebDriverWait(driver, 30)
 
     try:
-        # 1) Go straight to the booking system
         driver.get(BOOKING_URL)
         print("Page title:", driver.title)
 
-        # 2) Dismiss cookie banner on booking site if present
+        # Cookie banner
         try:
-            # “Ablehnen” (reject) button ID (observed): cookie_msg_btn_no
             wait.until(EC.element_to_be_clickable((By.ID, "cookie_msg_btn_no"))).click()
             print("[✓] Cookie banner dismissed.")
         except Exception:
             print("[i] No cookie banner to dismiss.")
 
-        # 3) Click “Fahrerlaubnis”
+        # Click Fahrerlaubnis
         wait.until(EC.element_to_be_clickable((By.ID, "buttonfunktionseinheit-5"))).click()
         print("[✓] Clicked 'Fahrerlaubnis'")
 
-        # 4) Expand “Persönliche Vorsprache (zur Abholung Führerschein)”
-        # Prefer the known ID; fall back to text-based XPath if ID changes.
+        # Expand Persönliche Vorsprache (zur Abholung Führerschein)
         try:
             wait.until(EC.element_to_be_clickable((By.ID, "header_concerns_accordion-170"))).click()
         except Exception:
@@ -67,43 +90,50 @@ def check_appointment():
             )).click()
         print("[✓] Expanded 'Persönliche Vorsprache (zur Abholung Führerschein)'")
 
-        # 5) Tick “Führerschein Allgemein”  (you confirmed ID = span-cnc-1027)
+        # Tick Führerschein Allgemein
         wait.until(EC.element_to_be_clickable((By.ID, "span-cnc-1027"))).click()
         print("[✓] Selected 'Führerschein Allgemein'")
 
-        # 6) Confirm OK (modal)
+        # First OK confirmation
         try:
             wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
-            print("[✓] Confirmed selection (OK).")
+            print("[✓] Confirmed first OK.")
         except Exception:
-            print("[i] No confirmation modal.")
+            print("[i] No first OK modal.")
 
-        # 7) Click “Weiter”
+        # Click Weiter
         wait.until(EC.element_to_be_clickable((By.ID, "WeiterButton"))).click()
         print("[✓] Clicked 'Weiter'")
 
-        # 8) Click “Führerscheinstelle auswählen” if present on this step
+        # Second OK (Hinweis modal)
         try:
-            btn = wait.until(EC.presence_of_element_located((By.NAME, "select_location")))
-            if btn.is_displayed() and btn.is_enabled():
-                btn.click()
-                print("[✓] Clicked 'Führerscheinstelle auswählen'")
+            wait.until(EC.element_to_be_clickable((By.ID, "OKButton"))).click()
+            print("[✓] Confirmed second OK (Hinweis modal).")
         except Exception:
-            print("[i] 'Führerscheinstelle auswählen' button not present — proceeding.")
+            print("[i] No Hinweis modal.")
 
-        # 9) Final status check on the current page
+        # Click Führerscheinstelle auswählen
+        wait.until(EC.element_to_be_clickable((By.NAME, "select_location"))).click()
+        print("[✓] Clicked 'Führerscheinstelle auswählen'")
+
+        # Check availability
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(2)  # small settle time for dynamic content
+        time.sleep(2)
         html = driver.page_source
 
         if "Keine Zeiten verfügbar" in html:
             print("[✗] No appointment slots available.")
+            return
+
+        slot_date = extract_first_slot_date(driver)
+
+        if slot_date:
+            print(f"[✓] Appointment slot found: {slot_date}")
+            subject = f"Führerscheinstelle Slot: {slot_date}"
+            body = f"First available date: {slot_date}\nBooking page: {BOOKING_URL}"
+            send_email(subject, body)
         else:
-            print("[✓] Appointment slots FOUND! Sending email…")
-            send_email(
-                "Führerscheinstelle Slot Available",
-                "A slot seems available. Open:\nhttps://termine-reservieren.de/termine/lramuenchen/efa/"
-            )
+            print("[!] Slot found but could not extract date.")
 
     except Exception as e:
         print("[!] Exception occurred:")
