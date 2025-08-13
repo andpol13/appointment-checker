@@ -3,11 +3,11 @@ name: Check Appointments
 on:
   schedule:
     # Every 5 mins between 07:00–09:00 CEST (05:00–07:00 UTC)
-    - cron: "*/5 5-7 * * *"
+    - #cron: "*/5 5-7 * * *"
     # Every 30 mins between 05:00–06:59 CEST (03:00–04:59 UTC)
-    - cron: "0,30 3-4 * * *"
+    - #cron: "0,30 3-4 * * *"
     # Every 30 mins between 09:00–23:59 CEST (07:00–21:59 UTC)
-    - cron: "0,30 7-21 * * *"
+    - #cron: "0,30 7-21 * * *"
   workflow_dispatch:
 
 jobs:
